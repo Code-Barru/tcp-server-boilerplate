@@ -1,0 +1,13 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.45.1", features = ["full"] }
+x25519-dalek = "2.0.1"
+shared = { path = "../shared" }
+rand = "0.9.1"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+aes-gcm = "0.10.3"
