@@ -1,4 +1,6 @@
 mod network;
+use std::time::Duration;
+
 use network::Client;
 
 fn main() {
@@ -8,13 +10,19 @@ fn main() {
                 Ok(client) => break client,
                 Err(_) => {
                     eprintln!("Failed to connect to server, retrying in 5 seconds..");
-                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    std::thread::sleep(Duration::from_secs(5));
                 }
             }
         };
         println!("Connected to server successfully!");
-
+        let mut counter = 0;
         loop {
+            if counter >= 5 {
+                let _ = client.send(&[]);
+                std::thread::sleep(Duration::from_secs(1));
+                std::process::exit(0);
+            }
+
             let res = client.send(b"Hello from client!");
             if let Err(_) = res {
                 eprintln!("Failed to send message, server may be down. Reconnecting in 5s...");
@@ -36,7 +44,8 @@ fn main() {
                 break;
             }
             println!("Received from server: {:?}", response);
-            std::thread::sleep(std::time::Duration::from_secs(5));
+            counter += 1;
+            std::thread::sleep(Duration::from_secs(1));
         }
 
         match client.shutdown() {

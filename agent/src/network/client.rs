@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use shared::encryption::encrypt;
+use shared::encryption::{decrypt, encrypt};
+
+use crate::network::error::NetworkError;
 
 use super::{Connection, ReadHalf, WriteHalf};
 
@@ -12,7 +14,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(addr: &str) -> std::io::Result<Self> {
+    pub fn new(addr: &str) -> Result<Self, NetworkError> {
         let connection = Connection::connect(addr)?;
         let (mut reader, mut writer) = connection.split();
 
@@ -25,21 +27,23 @@ impl Client {
         })
     }
 
-    pub fn shutdown(&self) -> std::io::Result<()> {
-        self.writer.lock().unwrap().shutdown()?;
-        self.reader.shutdown()
-    }
-
-    pub fn send(&self, buf: &[u8]) -> Result<(), std::io::Error> {
-        let (encrypted_buf, nonce) = match encrypt(&self.shared_secret, buf) {
-            Ok(data) => data,
+    pub fn shutdown(&self) -> Result<(), NetworkError> {
+        let mut writer = match self.writer.lock() {
+            Ok(writer) => writer,
             Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Encryption failed",
-                ));
+                return Err(NetworkError::LockError);
             }
         };
+
+        writer.write(&[])?;
+        writer.flush()?;
+        self.writer.lock().unwrap().shutdown()?;
+        self.reader.shutdown()?;
+        Ok(())
+    }
+
+    pub fn send(&self, buf: &[u8]) -> Result<(), NetworkError> {
+        let (encrypted_buf, nonce) = encrypt(&self.shared_secret, buf)?;
 
         let mut data = Vec::with_capacity(4 + nonce.len() + encrypted_buf.len());
         let len = encrypted_buf.len() as u32;
@@ -51,10 +55,7 @@ impl Client {
         let mut writer = match self.writer.lock() {
             Ok(writer) => writer,
             Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to lock writer",
-                ));
+                return Err(NetworkError::LockError);
             }
         };
 
@@ -63,7 +64,7 @@ impl Client {
         Ok(())
     }
 
-    pub fn receive(&mut self) -> Result<Vec<u8>, std::io::Error> {
+    pub fn receive(&mut self) -> Result<Vec<u8>, NetworkError> {
         let mut len_buf = [0u8; 4];
         self.reader.read_exact(&mut len_buf)?;
 
@@ -78,10 +79,7 @@ impl Client {
         let mut encrypted_buf = vec![0u8; len];
         self.reader.read_exact(&mut encrypted_buf)?;
 
-        let decrypted_data =
-            shared::encryption::decrypt(&self.shared_secret, &nonce_buf, &encrypted_buf).map_err(
-                |_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Decryption failed"),
-            )?;
+        let decrypted_data = decrypt(&self.shared_secret, &nonce_buf, &encrypted_buf)?;
 
         Ok(decrypted_data)
     }

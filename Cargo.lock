@@ -59,6 +59,7 @@ dependencies = [
  "aes-gcm",
  "rand",
  "shared",
+ "thiserror",
  "x25519-dalek",
 ]
 
