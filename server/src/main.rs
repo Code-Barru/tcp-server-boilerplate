@@ -21,7 +21,7 @@ async fn main() {
                     let res = misc::handle_connection(stream).await;
 
                     if let Err(e) = res {
-                        tracing::error!("Error handling connection: {}", e);
+                        tracing::error!("Error in connection: {}", e);
                     }
                 });
             }

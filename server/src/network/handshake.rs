@@ -3,13 +3,14 @@ use shared::{
     encryption::encrypt,
     packets::{EncryptionRequest, EncryptionResponse, Packet, Packets, from_packet_bytes},
 };
+use super::NetworkError;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 pub async fn perform_handshake(
     reader: &mut tokio::net::tcp::OwnedReadHalf,
     writer: &mut tokio::net::tcp::OwnedWriteHalf,
-) -> Result<[u8; 32], std::io::Error> {
+) -> Result<[u8; 32], NetworkError> {
     // Getting the encryption request from the client
     let mut encryption_request_buffer = [0u8; EncryptionRequest::PACKET_SIZE];
     reader.read_exact(&mut encryption_request_buffer).await?;
@@ -17,16 +18,10 @@ pub async fn perform_handshake(
     let encryption_request = match from_packet_bytes(&encryption_request_buffer) {
         Ok(Packets::EncryptionRequest(packet)) => packet,
         Ok(_) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Expected EncryptionRequest packet",
-            ));
+            return Err(NetworkError::UnexpectedPacket);
         }
         Err(e) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("Failed to deserialize packet: {:?}", e),
-            ));
+            return Err(NetworkError::PacketError(e));
         }
     };
     let secret = EphemeralSecret::random_from_rng(OsRng);
@@ -37,8 +32,7 @@ pub async fn perform_handshake(
     let (verified_token, nonce) = encrypt(
         &shared_secret,
         &encryption_request.verify_token.to_be_bytes(),
-    )
-    .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Encryption failed"))?;
+    )?;
 
     // Rust shenanigans to conver the Vec<u8> to [u8; 24] and [u8; 12]
     let verified_token_array: [u8; 24] = verified_token.as_slice().try_into().map_err(|_| {
@@ -53,10 +47,8 @@ pub async fn perform_handshake(
 
     let response =
         EncryptionResponse::new(public_secret.to_bytes(), nonce_array, verified_token_array);
-    let serialized_response = match response.serialize() {
-        Ok(res) => res,
-        Err(_) => panic!("tmp")
-    };
+
+    let serialized_response = response.serialize()?;
 
     writer.write(&serialized_response).await?;
 

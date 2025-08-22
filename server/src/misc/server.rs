@@ -1,14 +1,13 @@
-use std::io;
 use tokio::net::TcpStream;
 use tracing::info;
 
-use crate::network::{Connection, perform_handshake};
+use crate::network::{perform_handshake, Connection, NetworkError};
 
-pub async fn handle_connection(stream: TcpStream) -> io::Result<()> {
+pub async fn handle_connection(stream: TcpStream) -> Result<(), NetworkError> {
     let (mut read_half, mut write_half) = stream.into_split();
     let ip = read_half.peer_addr()?;
     let shared_secret = perform_handshake(&mut read_half, &mut write_half).await?;
-    let mut connection = Connection::new(read_half, write_half, shared_secret)?;
+    let mut connection = Connection::new(read_half, write_half, shared_secret);
 
     loop {
         let response = match connection.receive().await {

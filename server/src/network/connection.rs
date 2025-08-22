@@ -1,6 +1,8 @@
-use std::{io, sync::Arc};
+use std::sync::Arc;
 
-use shared::encryption::encrypt;
+use crate::network::NetworkError;
+use shared::encryption::{decrypt, encrypt};
+
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -18,24 +20,16 @@ impl Connection {
         reader: OwnedReadHalf,
         writer: OwnedWriteHalf,
         shared_secret: [u8; 32],
-    ) -> io::Result<Self> {
-        Ok(Connection {
+    ) -> Self {
+        Connection {
             reader,
             writer: Arc::new(Mutex::new(writer)),
             shared_secret,
-        })
+        }
     }
 
-    pub async fn send(&self, buf: &[u8]) -> Result<(), std::io::Error> {
-        let (encrypted_buf, nonce) = match encrypt(&self.shared_secret, buf) {
-            Ok(data) => data,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Encryption failed",
-                ));
-            }
-        };
+    pub async fn send(&self, buf: &[u8]) -> Result<(), NetworkError> {
+        let (encrypted_buf, nonce) = encrypt(&self.shared_secret, buf)?;
 
         let mut data = Vec::with_capacity(4 + nonce.len() + encrypted_buf.len());
         let len = encrypted_buf.len() as u32;
@@ -51,7 +45,7 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn receive(&mut self) -> Result<Vec<u8>, std::io::Error> {
+    pub async fn receive(&mut self) -> Result<Vec<u8>, NetworkError> {
         let mut len_buf = [0u8; 4];
         self.reader.read_exact(&mut len_buf).await?;
 
@@ -66,10 +60,7 @@ impl Connection {
         let mut encrypted_buf = vec![0u8; len];
         self.reader.read_exact(&mut encrypted_buf).await?;
 
-        let decrypted_data =
-            shared::encryption::decrypt(&self.shared_secret, &nonce_buf, &encrypted_buf).map_err(
-                |_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Decryption failed"),
-            )?;
+        let decrypted_data = decrypt(&self.shared_secret, &nonce_buf, &encrypted_buf)?;
 
         Ok(decrypted_data)
     }

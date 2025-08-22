@@ -516,6 +516,7 @@ dependencies = [
  "aes-gcm",
  "rand",
  "shared",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -538,7 +539,6 @@ dependencies = [
  "aes-gcm",
  "bincode",
  "rand",
- "serde",
  "thiserror",
 ]
 
