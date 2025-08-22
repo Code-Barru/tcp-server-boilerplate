@@ -53,7 +53,12 @@ pub async fn perform_handshake(
 
     let response =
         EncryptionResponse::new(public_secret.to_bytes(), nonce_array, verified_token_array);
-    writer.write(&response.serialize()).await?;
+    let serialized_response = match response.serialize() {
+        Ok(res) => res,
+        Err(_) => panic!("tmp")
+    };
+
+    writer.write(&serialized_response).await?;
 
     Ok(shared_secret)
 }

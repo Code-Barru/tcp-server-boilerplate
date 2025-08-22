@@ -1,49 +1,41 @@
-use super::packet::{Error, Packet};
+use bincode::{self, Decode, Encode};
+use super::packet::{PacketError, Packet};
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub struct EncryptionRequest {
     pub key: [u8; 32],
     pub verify_token: u64,
 }
 
 impl EncryptionRequest {
-    pub const PACKET_SIZE: usize = 41;
+    pub const PACKET_SIZE: usize = 42;
     pub fn new(key: [u8; 32], verify_token: u64) -> Self {
         EncryptionRequest { key, verify_token }
     }
 }
 
 impl Packet for EncryptionRequest {
-    fn serialize(&self) -> Vec<u8> {
-        let mut data = Vec::new();
+    fn serialize(&self) -> Result<Vec<u8>, PacketError> {
+        let mut data: Vec<u8> = Vec::new();
+        let encoded_packet = match bincode::encode_to_vec(self, bincode::config::standard()) {
+            Ok(packet) => packet,
+            Err(e) => return Err(PacketError::EncodingError(e.to_string()))
+        };
         data.push(0x01);
-        data.extend_from_slice(&self.key);
-        data.extend_from_slice(&self.verify_token.to_be_bytes());
-        data
+        data.extend(encoded_packet.as_slice());
+        Ok(data)
     }
 
-    fn deserialize(data: &[u8]) -> Result<Self, super::packet::Error>
+    fn deserialize(data: &[u8]) -> Result<Self, PacketError>
     where
         Self: Sized,
     {
-        if data.len() != EncryptionRequest::PACKET_SIZE - 1 {
-            return Err(Error::InvalidData);
-        }
+        let (decoded, _) = match bincode::decode_from_slice(data, bincode::config::standard()) {
+            Ok(res) => res,
+            Err(e) => return Err(PacketError::DecodingError(e.to_string()))
+        };
 
-        let key: [u8; 32] = data
-            .get(..32)
-            .ok_or(Error::ParseError)?
-            .try_into()
-            .map_err(|_| Error::ParseError)?;
-
-        let verify_token = u64::from_be_bytes(
-            data.get(32..40)
-                .ok_or(Error::ParseError)?
-                .try_into()
-                .map_err(|_| Error::ParseError)?,
-        );
-
-        Ok(EncryptionRequest::new(key, verify_token))
+        Ok(decoded)
     }
 
     fn packet_code() -> u8 {

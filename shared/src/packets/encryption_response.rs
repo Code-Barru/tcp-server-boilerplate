@@ -1,6 +1,8 @@
-use super::{Error, Packet};
+use bincode::{Decode, Encode};
 
-#[derive(Debug)]
+use super::{PacketError, Packet};
+
+#[derive(Debug, Encode, Decode)]
 pub struct EncryptionResponse {
     pub key: [u8; 32],
     pub nonce: [u8; 12],
@@ -19,46 +21,26 @@ impl EncryptionResponse {
 }
 
 impl Packet for EncryptionResponse {
-    fn serialize(&self) -> Vec<u8> {
-        let mut data = Vec::new();
+    fn serialize(&self) -> Result<Vec<u8>, PacketError> {
+        let mut data: Vec<u8> = Vec::new();
+        let encoded_packet = match bincode::encode_to_vec(self, bincode::config::standard()) {
+            Ok(packet) => packet,
+            Err(e) => return Err(PacketError::EncodingError(e.to_string()))
+        };
         data.push(0x02);
-        data.extend_from_slice(&self.key);
-        data.extend_from_slice(&self.nonce);
-        data.extend_from_slice(&self.verify_token);
-        data
+        data.extend(&encoded_packet);
+        Ok(data)
     }
 
-    fn deserialize(data: &[u8]) -> Result<Self, super::packet::Error>
+    fn deserialize(data: &[u8]) -> Result<Self, PacketError>
     where
         Self: Sized,
     {
-        if data.len() != EncryptionResponse::PACKET_SIZE - 1 {
-            return Err(Error::InvalidData);
-        }
-
-        let key = data
-            .get(..32)
-            .ok_or(Error::ParseError)?
-            .try_into()
-            .map_err(|_| Error::ParseError)?;
-
-        let nonce = data
-            .get(32..44)
-            .ok_or(Error::ParseError)?
-            .try_into()
-            .map_err(|_| Error::ParseError)?;
-
-        let verify_token = data
-            .get(44..68)
-            .ok_or(Error::ParseError)?
-            .try_into()
-            .map_err(|_| Error::ParseError)?;
-
-        Ok(EncryptionResponse {
-            key,
-            nonce,
-            verify_token,
-        })
+        let (decoded, _) = match bincode::decode_from_slice(data, bincode::config::standard()) {
+            Ok(res) => res,
+            Err(e) => return Err(PacketError::DecodingError(e.to_string()))
+        };
+        Ok(decoded)
     }
 
     fn packet_code() -> u8 {

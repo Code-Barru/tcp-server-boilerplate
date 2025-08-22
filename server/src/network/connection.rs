@@ -74,6 +74,7 @@ impl Connection {
         Ok(decrypted_data)
     }
 
+    #[allow(dead_code)]
     pub async fn shutdown(&self) -> std::io::Result<()> {
         self.writer.lock().await.shutdown().await
     }
