@@ -1,11 +1,10 @@
 use aes_gcm::aead::OsRng;
 use shared::{
     encryption::decrypt,
+    error::NetworkError,
     packets::{EncryptionRequest, EncryptionResponse, Packet, Packets, from_packet_bytes},
 };
 use x25519_dalek::{EphemeralSecret, PublicKey};
-
-use crate::network::error::NetworkError;
 
 pub fn perform_handshake(
     reader: &mut impl std::io::Read,
@@ -17,7 +16,7 @@ pub fn perform_handshake(
 
     let packet = EncryptionRequest::new(public_key.to_bytes(), verify_token);
     let serialized_packet = packet.serialize()?;
-    writer.write(&serialized_packet)?;
+    writer.write_all(&serialized_packet)?;
 
     let mut response_buffer = vec![0; EncryptionResponse::PACKET_SIZE];
     reader.read_exact(&mut response_buffer)?;
@@ -36,10 +35,17 @@ pub fn perform_handshake(
         .to_bytes();
 
     let decrypted_token_bytes = decrypt(&shared_secret, &response.nonce, &response.verify_token)?;
-    let decrypted_token = u64::from_be_bytes(decrypted_token_bytes.try_into().map_err(|_| NetworkError::ConvertError)?);
+    let decrypted_token = u64::from_be_bytes(
+        decrypted_token_bytes
+            .try_into()
+            .map_err(|_| NetworkError::ConvertError)?,
+    );
 
     if decrypted_token != verify_token {
-        return Err(NetworkError::TokenDontMatch{got: decrypted_token, expected: verify_token});
+        return Err(NetworkError::TokenDontMatch {
+            got: decrypted_token,
+            expected: verify_token,
+        });
     }
 
     Ok(shared_secret)

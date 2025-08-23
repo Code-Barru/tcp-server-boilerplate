@@ -1,56 +1,65 @@
 mod network;
+use std::sync::Arc;
 use std::time::Duration;
 
-use network::Client;
+use network::{Client, MultiplexManager};
 
 fn main() {
-    loop {
-        let mut client = loop {
-            match Client::new("127.0.0.1:1337") {
-                Ok(client) => break client,
-                Err(_) => {
-                    eprintln!("Failed to connect to server, retrying in 5 seconds..");
-                    std::thread::sleep(Duration::from_secs(5));
-                }
+    let client = loop {
+        match Client::new("127.0.0.1:1337") {
+            Ok(client) => break client,
+            Err(_) => {
+                eprintln!("Failed to connect to server, retrying in 5 seconds..");
+                std::thread::sleep(Duration::from_secs(5));
             }
-        };
-        println!("Connected to server successfully!");
-        let mut counter = 0;
-        loop {
-            if counter >= 5 {
-                let _ = client.send(&[]);
-                std::thread::sleep(Duration::from_secs(1));
-                std::process::exit(0);
-            }
-
-            let res = client.send(b"Hello from client!");
-            if let Err(_) = res {
-                eprintln!("Failed to send message, server may be down. Reconnecting in 5s...");
-                break;
-            }
-
-            let response = match client.receive() {
-                Ok(response) => response,
-                Err(_) => {
-                    eprintln!(
-                        "Failed to receive response, server may be down. Reconnecting in 5s..."
-                    );
-                    break;
-                }
-            };
-
-            if response.is_empty() {
-                println!("Server closed the connection.");
-                break;
-            }
-            println!("Received from server: {:?}", response);
-            counter += 1;
-            std::thread::sleep(Duration::from_secs(1));
         }
+    };
+    println!("Connected to server successfully!");
 
-        match client.shutdown() {
-            Ok(_) => (),
-            Err(e) => eprintln!("Failed to close connection: {}", e),
-        };
+    let manager = Arc::new(MultiplexManager::new(client));
+
+    let _receive_thread = manager.start();
+
+    println!("Multiplex manager started, waiting for streams from server...");
+
+    loop {
+        match manager.accept_stream() {
+            Ok(stream) => {
+                println!("Stream opened by server: stream_id={}", stream.id());
+
+                std::thread::spawn(move || {
+                    loop {
+                        match stream.receive() {
+                            Ok(data) => {
+                                if data.is_empty() {
+                                    println!("Stream {} closed", stream.id());
+                                    break;
+                                }
+                                println!(
+                                    "Stream {}: received {} bytes: {:?}",
+                                    stream.id(),
+                                    data.len(),
+                                    String::from_utf8_lossy(&data)
+                                );
+
+                                if let Err(e) = stream.send_bytes(&data) {
+                                    eprintln!("Failed to send on stream {}: {}", stream.id(), e);
+                                    break;
+                                }
+                                println!("Stream {}: sent echo", stream.id());
+                            }
+                            Err(e) => {
+                                eprintln!("Stream {} receive error: {}", stream.id(), e);
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            Err(e) => {
+                eprintln!("Failed to accept stream: {}", e);
+                break;
+            }
+        }
     }
 }

@@ -1,8 +1,8 @@
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 use shared::encryption::{decrypt, encrypt};
-
-use crate::network::error::NetworkError;
+use shared::error::NetworkError;
 
 use super::{Connection, ReadHalf, WriteHalf};
 
@@ -45,12 +45,13 @@ impl Client {
     pub fn send(&self, buf: &[u8]) -> Result<(), NetworkError> {
         let (encrypted_buf, nonce) = encrypt(&self.shared_secret, buf)?;
 
-        let mut data = Vec::with_capacity(4 + nonce.len() + encrypted_buf.len());
         let len = encrypted_buf.len() as u32;
+        let total_size = 4 + nonce.len() + encrypted_buf.len();
+        let mut data = vec![0u8; total_size];
 
-        data.extend_from_slice(&len.to_be_bytes());
-        data.extend_from_slice(&nonce);
-        data.extend_from_slice(&encrypted_buf);
+        data[0..4].copy_from_slice(&len.to_be_bytes());
+        data[4..16].copy_from_slice(&nonce);
+        data[16..].copy_from_slice(&encrypted_buf);
 
         let mut writer = match self.writer.lock() {
             Ok(writer) => writer,
@@ -59,7 +60,7 @@ impl Client {
             }
         };
 
-        writer.write(&data)?;
+        writer.write_all(&data)?;
         writer.flush()?;
         Ok(())
     }
@@ -82,5 +83,11 @@ impl Client {
         let decrypted_data = decrypt(&self.shared_secret, &nonce_buf, &encrypted_buf)?;
 
         Ok(decrypted_data)
+    }
+
+    /// Deconstruct the client into its components (reader, writer, shared_secret)
+    /// This is useful for the multiplex manager to avoid mutex contention
+    pub fn into_parts(self) -> (ReadHalf, Arc<Mutex<WriteHalf>>, [u8; 32]) {
+        (self.reader, self.writer, self.shared_secret)
     }
 }

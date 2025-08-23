@@ -1,7 +1,7 @@
-mod connection;
 mod handshake;
-mod error;
+mod stream;
+mod multiplex;
 
-pub use connection::Connection;
 pub use handshake::perform_handshake;
-pub use error::NetworkError;
+pub use stream::Stream;
+pub use multiplex::MultiplexManager;

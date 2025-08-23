@@ -9,3 +9,4 @@ shared = { path = "../shared" }
 aes-gcm = "0.10.3"
 rand = "0.9.1"
 thiserror = "2.0.16"
+crossbeam = "0.8"

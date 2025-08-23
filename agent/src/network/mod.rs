@@ -1,8 +1,10 @@
 mod client;
 mod connection;
 mod handshake;
-mod error;
+mod stream;
+mod multiplex;
 
 pub use client::Client;
-use connection::{Connection, ReadHalf, WriteHalf};
+pub use multiplex::MultiplexManager;
+pub(crate) use connection::{Connection, ReadHalf, WriteHalf};
 use handshake::perform_handshake;

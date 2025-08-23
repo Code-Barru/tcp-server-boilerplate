@@ -1,9 +1,9 @@
 use aes_gcm::aead::OsRng;
 use shared::{
+    error::NetworkError,
     encryption::encrypt,
     packets::{EncryptionRequest, EncryptionResponse, Packet, Packets, from_packet_bytes},
 };
-use super::NetworkError;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
@@ -50,7 +50,7 @@ pub async fn perform_handshake(
 
     let serialized_response = response.serialize()?;
 
-    writer.write(&serialized_response).await?;
+    writer.write_all(&serialized_response).await?;
 
     Ok(shared_secret)
 }
