@@ -49,6 +49,7 @@ impl ReadHalf {
         self.stream.read_exact(buf)
     }
 
+    #[allow(dead_code)]
     pub fn shutdown(&self) -> io::Result<()> {
         self.stream.shutdown(std::net::Shutdown::Read)
     }

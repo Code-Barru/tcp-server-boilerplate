@@ -11,7 +11,7 @@ pub struct EncryptionResponse {
 
 impl EncryptionResponse {
     pub const PACKET_SIZE: usize = 69;
-    
+
     pub fn new(key: [u8; 32], nonce: [u8; 12], verify_token: [u8; 24]) -> Self {
         EncryptionResponse {
             key,

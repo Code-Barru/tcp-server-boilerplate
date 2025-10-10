@@ -1,7 +1,23 @@
 mod encryption_request;
 mod encryption_response;
+mod error_code;
+mod file_chunk;
+mod frame;
 mod packet;
+mod packet_error;
+mod packet_type;
+mod ping_request;
+mod pong_response;
+mod response_status;
 
 pub use encryption_request::EncryptionRequest;
 pub use encryption_response::EncryptionResponse;
-pub use packet::{PacketError, Packet, Packets, from_packet_bytes};
+pub use error_code::ErrorCode;
+pub use file_chunk::FileChunk;
+pub use frame::Frame;
+pub use packet::{Packet, Packets, from_packet_bytes};
+pub use packet_error::PacketError;
+pub use packet_type::PacketType;
+pub use ping_request::PingRequest;
+pub use pong_response::PongResponse;
+pub use response_status::ResponseStatus;

@@ -1,56 +1,48 @@
 mod network;
+
+use std::thread;
 use std::time::Duration;
 
-use network::Client;
+use network::{Client, dispatch_frame};
 
 fn main() {
     loop {
-        let mut client = loop {
+        let client = loop {
             match Client::new("127.0.0.1:1337") {
                 Ok(client) => break client,
                 Err(_) => {
                     eprintln!("Failed to connect to server, retrying in 5 seconds..");
-                    std::thread::sleep(Duration::from_secs(5));
+                    thread::sleep(Duration::from_secs(5));
                 }
             }
         };
         println!("Connected to server successfully!");
-        let mut counter = 0;
-        loop {
-            if counter >= 5 {
-                let _ = client.send(&[]);
-                std::thread::sleep(Duration::from_secs(1));
-                std::process::exit(0);
-            }
 
-            let res = client.send(b"Hello from client!");
-            if let Err(_) = res {
-                eprintln!("Failed to send message, server may be down. Reconnecting in 5s...");
-                break;
-            }
+        let (mut reader, writer) = client.split();
 
-            let response = match client.receive() {
-                Ok(response) => response,
-                Err(_) => {
-                    eprintln!(
-                        "Failed to receive response, server may be down. Reconnecting in 5s..."
-                    );
-                    break;
+        let receiver_thread = thread::spawn(move || {
+            loop {
+                match reader.receive_frame() {
+                    Ok(frame) => {
+                        println!("Received frame: {:?}", frame.packet_type);
+                        let responses = dispatch_frame(&frame);
+
+                        for response in responses {
+                            if let Err(e) = writer.send_frame(&response) {
+                                eprintln!("Failed to send response: {:?}", e);
+                                return;
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        eprintln!("Failed to receive frame, connection may be down.");
+                        break;
+                    }
                 }
-            };
-
-            if response.is_empty() {
-                println!("Server closed the connection.");
-                break;
             }
-            println!("Received from server: {:?}", response);
-            counter += 1;
-            std::thread::sleep(Duration::from_secs(1));
-        }
+        });
 
-        match client.shutdown() {
-            Ok(_) => (),
-            Err(e) => eprintln!("Failed to close connection: {}", e),
-        };
+        let _ = receiver_thread.join();
+        thread::sleep(Duration::from_secs(5));
     }
 }

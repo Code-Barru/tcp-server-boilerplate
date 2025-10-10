@@ -193,3 +193,77 @@ let mut client = Client::new("192.168.1.100:8080")?;
 - Verification tokens prevent replay attacks during handshake
 - Connection state is properly cleaned up on termination
 - No persistent key storage (ephemeral keys only)
+
+## 📦 Multi-Frame Streaming
+
+The framework supports streaming large data across multiple frames, perfect for file transfers or chunked data transmission.
+
+### Server-Side: Sending Request and Receiving Multiple Frames
+
+```rust
+use crate::network::ConnectionHandle;
+use shared::packets::{PacketType, FileChunk, Packet};
+
+async fn download_file(handle: &ConnectionHandle) -> Result<Vec<u8>, NetworkError> {
+    // Send request to agent
+    let mut request = handle.send_request(PacketType::FileDownloadRequest, file_path_bytes).await?;
+
+    let mut file_data = Vec::new();
+
+    // Iterate over frames as they arrive
+    while let Some(frame) = request.next_frame().await {
+        // Deserialize chunk
+        let chunk = FileChunk::deserialize(&frame.payload)?;
+        file_data.extend_from_slice(&chunk.data);
+
+        println!("Received chunk #{} ({} bytes)", chunk.chunk_number, chunk.data.len());
+
+        // Check if this is the last frame
+        if frame.is_last {
+            println!("Download complete! Total: {} bytes", file_data.len());
+            break;
+        }
+    }
+
+    Ok(file_data)
+}
+```
+
+### Agent-Side: Responding with Multiple Frames
+
+```rust
+use shared::packets::{Frame, FileChunk, PacketType, Packet};
+
+fn handle_file_download(frame: &Frame) -> Vec<Frame> {
+    let file_data = read_file(&frame.payload)?;
+    let chunk_size = 4096;
+    let total_chunks = (file_data.len() + chunk_size - 1) / chunk_size;
+
+    let mut frames = Vec::new();
+
+    for (i, chunk_data) in file_data.chunks(chunk_size).enumerate() {
+        let chunk = FileChunk::new(i as u32, chunk_data.to_vec());
+        let payload = chunk.serialize()?[1..].to_vec();
+
+        let is_last = i == total_chunks - 1;
+        let response = Frame::new_with_flag(
+            frame.request_id,
+            PacketType::FileDownloadChunk,
+            is_last,
+            payload
+        );
+
+        frames.push(response);
+    }
+
+    frames
+}
+```
+
+### Key Points
+
+- **`is_last` flag**: Indicates the final frame of a multi-frame sequence
+- **`Frame::new()`**: Creates a frame with `is_last = true` (single-frame response)
+- **`Frame::new_with_flag()`**: Explicitly control the `is_last` flag for multi-frame responses
+- **`request.next_frame()`**: Iterator-style API for receiving frames one by one
+- **Streaming**: Frames are processed as they arrive, no need to buffer everything in memory

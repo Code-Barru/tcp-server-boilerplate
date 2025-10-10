@@ -8,7 +8,7 @@ pub fn encrypt(key: &[u8], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Encry
     let nonce: [u8; 12] = rand::rng().random();
     let ciphertext = match cipher.encrypt(Nonce::from_slice(&nonce), plaintext) {
         Ok(ct) => ct,
-        Err(e) => return Err(EncryptionError::FailedToEncrypt(e.to_string()))
+        Err(e) => return Err(EncryptionError::FailedToEncrypt(e.to_string())),
     };
     Ok((ciphertext, nonce.to_vec()))
 }
@@ -26,5 +26,5 @@ pub enum EncryptionError {
     #[error("Failed to encrypt: {0}")]
     FailedToEncrypt(String),
     #[error("Failed to decrypt: {0}")]
-    FailedToDecrypt(String)
+    FailedToDecrypt(String),
 }

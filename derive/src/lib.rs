@@ -1,13 +1,13 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Data, Meta, Expr, Lit};
+use syn::{Data, DeriveInput, Expr, Lit, Meta, parse_macro_input};
 
 #[proc_macro_derive(Packet, attributes(packet))]
 pub fn derive_packet(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    
+
     // Vérifier que c'est une struct
-    let _data = match &input.data {
+    match &input.data {
         Data::Struct(_) => (),
         _ => {
             return syn::Error::new_spanned(&input, "Packet can only be derived for structs")
@@ -17,10 +17,10 @@ pub fn derive_packet(input: TokenStream) -> TokenStream {
     };
 
     let name = &input.ident;
-    
+
     // Parser l'attribut #[packet(code = 0x01)]
     let packet_code = extract_packet_code(&input);
-    
+
     let packet_code = match packet_code {
         Ok(code) => code,
         Err(err) => return err.to_compile_error().into(),
@@ -66,7 +66,7 @@ fn extract_packet_code(input: &DeriveInput) -> Result<u8, syn::Error> {
                 Meta::List(meta_list) => {
                     let tokens = &meta_list.tokens;
                     let parsed: syn::Result<syn::MetaNameValue> = syn::parse2(tokens.clone());
-                    
+
                     match parsed {
                         Ok(name_value) => {
                             if name_value.path.is_ident("code") {
@@ -75,39 +75,64 @@ fn extract_packet_code(input: &DeriveInput) -> Result<u8, syn::Error> {
                                         match &expr_lit.lit {
                                             Lit::Int(lit_int) => {
                                                 let token_str = lit_int.to_string();
-                                                
+
                                                 // Vérifier que c'est bien un code hexadécimal
-                                                if !token_str.starts_with("0x") && !token_str.starts_with("0X") {
+                                                if !token_str.starts_with("0x")
+                                                    && !token_str.starts_with("0X")
+                                                {
                                                     return Err(syn::Error::new_spanned(
-                                                        lit_int, 
-                                                        "Packet code must be in hexadecimal format (e.g., 0x01)"
+                                                        lit_int,
+                                                        "Packet code must be in hexadecimal format (e.g., 0x01)",
                                                     ));
                                                 }
-                                                
+
                                                 // Parser la valeur hexadécimale
                                                 let hex_value = &token_str[2..]; // Retirer le préfixe "0x"
                                                 let value = u8::from_str_radix(hex_value, 16)
                                                     .map_err(|_| syn::Error::new_spanned(
-                                                        lit_int, 
+                                                        lit_int,
                                                         "Invalid hexadecimal packet code - must be between 0x00 and 0xFF"
                                                     ))?;
-                                                
+
                                                 return Ok(value);
                                             }
-                                            _ => return Err(syn::Error::new_spanned(&name_value.value, "Packet code must be a hexadecimal integer (e.g., 0x01)")),
+                                            _ => {
+                                                return Err(syn::Error::new_spanned(
+                                                    &name_value.value,
+                                                    "Packet code must be a hexadecimal integer (e.g., 0x01)",
+                                                ));
+                                            }
                                         }
                                     }
-                                    _ => return Err(syn::Error::new_spanned(&name_value.value, "Packet code must be a literal hexadecimal integer")),
+                                    _ => {
+                                        return Err(syn::Error::new_spanned(
+                                            &name_value.value,
+                                            "Packet code must be a literal hexadecimal integer",
+                                        ));
+                                    }
                                 }
                             }
                         }
-                        Err(_) => return Err(syn::Error::new_spanned(attr, "Invalid packet attribute format. Use #[packet(code = 0x01)]")),
+                        Err(_) => {
+                            return Err(syn::Error::new_spanned(
+                                attr,
+                                "Invalid packet attribute format. Use #[packet(code = 0x01)]",
+                            ));
+                        }
                     }
                 }
-                _ => return Err(syn::Error::new_spanned(attr, "Invalid packet attribute format. Use #[packet(code = 0x01)]")),
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "Invalid packet attribute format. Use #[packet(code = 0x01)]",
+                    ));
+                }
             }
         }
     }
-    
-    Err(syn::Error::new_spanned(input, "Missing #[packet(code = ...)] attribute"))
+
+    Err(syn::Error::new_spanned(
+        input,
+        "Missing #[packet(code = ...)] attribute",
+    ))
 }

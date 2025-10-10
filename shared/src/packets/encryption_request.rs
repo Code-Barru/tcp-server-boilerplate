@@ -10,7 +10,7 @@ pub struct EncryptionRequest {
 
 impl EncryptionRequest {
     pub const PACKET_SIZE: usize = 42;
-    
+
     pub fn new(key: [u8; 32], verify_token: u64) -> Self {
         EncryptionRequest { key, verify_token }
     }

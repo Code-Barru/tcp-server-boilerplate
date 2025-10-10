@@ -1,7 +1,8 @@
 mod connection;
-mod handshake;
 mod error;
+mod handshake;
+mod request_manager;
 
-pub use connection::Connection;
-pub use handshake::perform_handshake;
+pub use connection::{Connection, ConnectionHandle};
 pub use error::NetworkError;
+pub use handshake::perform_handshake;
