@@ -68,12 +68,13 @@ impl Client {
     pub fn send(&self, buf: &[u8]) -> Result<(), NetworkError> {
         let (encrypted_buf, nonce) = encrypt(&self.shared_secret, buf)?;
 
-        let mut data = Vec::with_capacity(4 + nonce.len() + encrypted_buf.len());
         let len = encrypted_buf.len() as u32;
+        let total_size = 4 + nonce.len() + encrypted_buf.len();
+        let mut data = vec![0u8; total_size];
 
-        data.extend_from_slice(&len.to_be_bytes());
-        data.extend_from_slice(&nonce);
-        data.extend_from_slice(&encrypted_buf);
+        data[0..4].copy_from_slice(&len.to_be_bytes());
+        data[4..16].copy_from_slice(&nonce);
+        data[16..].copy_from_slice(&encrypted_buf);
 
         let mut writer = match self.writer.lock() {
             Ok(writer) => writer,
@@ -181,12 +182,13 @@ impl ClientWriter {
     pub fn send(&self, buf: &[u8]) -> Result<(), NetworkError> {
         let (encrypted_buf, nonce) = encrypt(&self.shared_secret, buf)?;
 
-        let mut data = Vec::with_capacity(4 + nonce.len() + encrypted_buf.len());
         let len = encrypted_buf.len() as u32;
+        let total_size = 4 + nonce.len() + encrypted_buf.len();
+        let mut data = vec![0u8; total_size];
 
-        data.extend_from_slice(&len.to_be_bytes());
-        data.extend_from_slice(&nonce);
-        data.extend_from_slice(&encrypted_buf);
+        data[0..4].copy_from_slice(&len.to_be_bytes());
+        data[4..16].copy_from_slice(&nonce);
+        data[16..].copy_from_slice(&encrypted_buf);
 
         let mut writer = match self.writer.lock() {
             Ok(writer) => writer,
